@@ -94,6 +94,62 @@ def write_summaries(chs, out_path, style="exam"):
                 rec["tips"] = summ.get("tips", [])
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
+def write_summaries_text(chs, out_path, style="exam"):
+    """将章节摘要写入易读的文本格式"""
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write("=" * 60 + "\n")
+        if style == "exam":
+            f.write("📚 章节考试分析报告\n")
+        else:
+            f.write("📚 章节内容摘要\n")
+        f.write("=" * 60 + "\n\n")
+        
+        for i, c in enumerate(chs, 1):
+            text = collapse_text(c.get("items", []), max_len=3000)
+            summ = rule_summary(c.get("title", ""), text, style=style)
+            
+            f.write(f"【章节 {c.get('chapter_id', i)}】{c.get('title', '无标题')}\n")
+            f.write("-" * 50 + "\n")
+            
+            # 主要内容要点
+            if summ.get("bullets"):
+                f.write("📋 主要内容：\n")
+                for bullet in summ["bullets"]:
+                    f.write(f"   • {bullet}\n")
+                f.write("\n")
+            
+            if style == "exam":
+                # 考试要点
+                if summ.get("exam_points"):
+                    f.write("🎯 考试要点：\n")
+                    for point in summ["exam_points"]:
+                        f.write(f"   • {point}\n")
+                    f.write("\n")
+                
+                # 题型模式
+                if summ.get("question_patterns"):
+                    f.write("📝 题型模式：\n")
+                    for pattern in summ["question_patterns"]:
+                        f.write(f"   • {pattern}\n")
+                    f.write("\n")
+                
+                # 易错点
+                if summ.get("pitfalls"):
+                    f.write("⚠️ 易错点：\n")
+                    for pitfall in summ["pitfalls"]:
+                        f.write(f"   • {pitfall}\n")
+                    f.write("\n")
+                
+                # 学习建议
+                if summ.get("tips"):
+                    f.write("💡 学习建议：\n")
+                    for tip in summ["tips"]:
+                        f.write(f"   • {tip}\n")
+                    f.write("\n")
+            
+            f.write("=" * 60 + "\n\n")
+
 def create_app():
     from fastapi import FastAPI
     from pydantic import BaseModel
@@ -127,6 +183,7 @@ def main():
     ap.add_argument("--output", default="finalout/chapters_summary.jsonl")
     ap.add_argument("--style", default="exam")
     ap.add_argument("--serve", action="store_true")
+    ap.add_argument("--text_format", action="store_true", help="生成文本格式输出")
     args = ap.parse_args()
     if args.serve:
         try:
@@ -139,6 +196,13 @@ def main():
         return
     chs = load_chapters(args.input)
     write_summaries(chs, args.output, style=args.style)
+    
+    # 可选生成文本格式
+    if args.text_format:
+        # 将输出文件路径的.jsonl替换为_text.txt
+        text_path = str(Path(args.output).with_suffix('')) + "_text.txt"
+        write_summaries_text(chs, text_path, style=args.style)
+        print("✅ 文本格式文件已生成")
 
 if __name__ == "__main__":
     main()

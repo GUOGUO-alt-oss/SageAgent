@@ -284,6 +284,96 @@ def analyze_file_custom(clean_paragraphs_path, output_jsonl_path, api_key, base_
 
 
 
+def write_analysis_text(analysis_jsonl_path, text_output_path):
+    """将LLM分析结果写入易读的文本格式"""
+    Path(text_output_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    key_sentences = []
+    non_key_sentences = []
+    total_sentences = 0
+    
+    with open(analysis_jsonl_path, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            try:
+                obj = json.loads(line)
+                items = obj.get("items", [])
+                
+                for item in items:
+                    total_sentences += 1
+                    category = item.get("类别", "非重点")
+                    sentence = item.get("句子", "")
+                    
+                    if category == "重点":
+                        key_sentences.append({
+                            "sentence": sentence,
+                            "summary": item.get("总结", ""),
+                            "importance": item.get("重要性说明", ""),
+                            "video_id": obj.get("video_id"),
+                            "start_ms": obj.get("start_ms")
+                        })
+                    else:
+                        non_key_sentences.append({
+                            "sentence": sentence,
+                            "reason": item.get("非重点原因", ""),
+                            "video_id": obj.get("video_id"),
+                            "start_ms": obj.get("start_ms")
+                        })
+            except Exception:
+                continue
+    
+    with open(text_output_path, "w", encoding="utf-8") as f:
+        f.write("=" * 60 + "\n")
+        f.write("🎯 LLM重点分析报告\n")
+        f.write("=" * 60 + "\n\n")
+        
+        # 统计信息
+        key_count = len(key_sentences)
+        non_key_count = len(non_key_sentences)
+        key_percentage = (key_count / total_sentences * 100) if total_sentences > 0 else 0
+        
+        f.write("📊 统计信息：\n")
+        f.write(f"   • 总句子数：{total_sentences}\n")
+        f.write(f"   • 重点句子：{key_count} ({key_percentage:.1f}%)\n")
+        f.write(f"   • 非重点句子：{non_key_count} ({100-key_percentage:.1f}%)\n\n")
+        
+        # 重点内容
+        if key_sentences:
+            f.write("🔥 重点内容分析：\n")
+            f.write("=" * 50 + "\n\n")
+            
+            for i, item in enumerate(key_sentences, 1):
+                start_ms = item.get("start_ms", 0)
+                start_min = start_ms // 60000
+                start_sec = (start_ms % 60000) // 1000
+                
+                f.write(f"【重点 {i:02d}】 {start_min:02d}:{start_sec:02d}\n")
+                f.write(f"📝 原句：{item['sentence']}\n")
+                f.write(f"💎 总结：{item['summary']}\n")
+                f.write(f"⭐ 重要性：{item['importance']}\n")
+                f.write("-" * 40 + "\n\n")
+        
+        # 非重点内容（仅显示前10个作为示例）
+        if non_key_sentences:
+            f.write("📝 非重点内容示例（前10个）：\n")
+            f.write("=" * 50 + "\n\n")
+            
+            for i, item in enumerate(non_key_sentences[:10], 1):
+                start_ms = item.get("start_ms", 0)
+                start_min = start_ms // 60000
+                start_sec = (start_ms % 60000) // 1000
+                
+                f.write(f"【非重点 {i:02d}】 {start_min:02d}:{start_sec:02d}\n")
+                f.write(f"📝 原句：{item['sentence']}\n")
+                f.write(f"📄 原因：{item['reason']}\n")
+                f.write("-" * 30 + "\n\n")
+            
+            if len(non_key_sentences) > 10:
+                f.write(f"... 还有 {len(non_key_sentences) - 10} 个非重点句子未显示\n\n")
+        
+        f.write("✅ 分析完成！建议重点关注标为🔥的内容。\n")
+
 # ==========================
 # 9. 对外接口
 # ==========================

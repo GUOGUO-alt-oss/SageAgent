@@ -95,6 +95,41 @@ def write_chapters(chapters, out_path):
                 "items": [{"start_ms": it["start_ms"], "end_ms": it["end_ms"], "text": it["text"]} for it in ch["items"]]
             }, ensure_ascii=False) + "\n")
 
+def format_time(ms):
+    """将毫秒转换为时分秒格式"""
+    seconds = ms // 1000
+    minutes = seconds // 60
+    hours = minutes // 60
+    seconds = seconds % 60
+    minutes = minutes % 60
+    if hours > 0:
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+    else:
+        return f"{minutes:02d}:{seconds:02d}"
+
+def write_chapters_text(chapters, out_path):
+    """生成易读的文本格式章节结果"""
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write("=== 课程章节分割结果 ===\n\n")
+        
+        for ch in chapters:
+            f.write(f"第 {ch['chapter_id']} 章：{ch['title']}\n")
+            f.write(f"时间：{format_time(ch['start_ms'])} - {format_time(ch['end_ms'])}\n")
+            f.write(f"时长：{format_time(ch['end_ms'] - ch['start_ms'])}\n")
+            f.write("-" * 50 + "\n")
+            
+            # 写入章节内容摘要
+            for i, item in enumerate(ch["items"][:3]):  # 只显示前3个段落作为摘要
+                text = item["text"].strip()
+                if text:
+                    f.write(f"{i+1}. {text}\n")
+            
+            if len(ch["items"]) > 3:
+                f.write(f"... (共 {len(ch['items'])} 个段落)\n")
+            
+            f.write("\n" + "=" * 60 + "\n\n")
+
 def create_app():
     from fastapi import FastAPI
     from pydantic import BaseModel
@@ -118,6 +153,7 @@ def main():
     ap.add_argument("--min_gap_ms", type=int, default=10000)
     ap.add_argument("--min_len_chars", type=int, default=100)
     ap.add_argument("--threshold", type=int, default=2)
+    ap.add_argument("--text_format", action="store_true", help="生成文本格式输出")
     ap.add_argument("--serve", action="store_true")
     args = ap.parse_args()
     if args.serve:
@@ -132,6 +168,11 @@ def main():
     paras = load_paragraphs(args.input)
     chs = segment_chapters(paras, args.min_gap_ms, args.min_len_chars, args.threshold)
     write_chapters(chs, args.output)
+    
+    # 可选生成文本格式
+    if args.text_format:
+        text_path = str(Path(args.output).with_suffix('')) + "_text.txt"
+        write_chapters_text(chs, text_path)
 
 if __name__ == "__main__":
     main()

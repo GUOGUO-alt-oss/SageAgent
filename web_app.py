@@ -62,16 +62,16 @@ def _run_job(uid, save_path, params):
         steps["clean"] = "done"
         _set_progress(uid, "chapters", steps)
         chapters_jsonl = str(outdir/"chapters.jsonl")
-        pipeline.run_chapters(clean_paragraphs, chapters_jsonl, params["min_gap_chapter_ms"], params["min_len_chapter_chars"], params["chapter_threshold"])
+        pipeline.run_chapters(clean_paragraphs, chapters_jsonl, params["min_gap_chapter_ms"], params["min_len_chapter_chars"], params["chapter_threshold"], text_format=True)
         steps["chapters"] = "done"
         _set_progress(uid, "summaries", steps)
-        pipeline.run_summaries(train_jsonl, chapters_jsonl, str(finalout), params["window_sec"], bool(params["exam"]))
+        pipeline.run_summaries(train_jsonl, chapters_jsonl, str(finalout), params["window_sec"], bool(params["exam"]), text_format=True)
         steps["summaries"] = "done"
         if params["llm_enable"] and params["llm_api_key"]:
             _set_progress(uid, "llm", steps)
             analysis_path = finalout/"focus_analysis.jsonl"
             try:
-                pipeline.run_llm_analysis(clean_paragraphs, str(analysis_path), params["llm_api_key"], params["llm_base_url"], params["llm_model"], dry_run=False)
+                pipeline.run_llm_analysis(clean_paragraphs, str(analysis_path), params["llm_api_key"], params["llm_base_url"], params["llm_model"], text_format=True, dry_run=False)
                 steps["llm"] = "done"
             except Exception:
                 steps["llm"] = "failed"
@@ -115,7 +115,7 @@ def analyze_clean(
     finalout.mkdir(parents=True, exist_ok=True)
     outp = finalout/"focus_analysis.jsonl"
     try:
-        pipeline.run_llm_analysis(clean_path, str(outp), llm_api_key, llm_base_url, llm_model, dry_run=bool(dry_run))
+        pipeline.run_llm_analysis(clean_path, str(outp), llm_api_key, llm_base_url, llm_model, text_format=True, dry_run=bool(dry_run))
     except Exception:
         return JSONResponse(status_code=500, content={"error": "llm_failed"})
     return read_jsonl(outp)
@@ -174,15 +174,15 @@ def process_video(
     clean_paragraphs = str(cleanout/"clean_paragraphs.jsonl")
     pipeline.run_clean(train_jsonl, clean_paragraphs, min_chars, max_gap_ms, style)
     chapters_jsonl = str(outdir/"chapters.jsonl")
-    pipeline.run_chapters(clean_paragraphs, chapters_jsonl, min_gap_chapter_ms, min_len_chapter_chars, chapter_threshold)
-    pipeline.run_summaries(train_jsonl, chapters_jsonl, str(finalout), window_sec, bool(exam))
+    pipeline.run_chapters(clean_paragraphs, chapters_jsonl, min_gap_chapter_ms, min_len_chapter_chars, chapter_threshold, text_format=True)
+    pipeline.run_summaries(train_jsonl, chapters_jsonl, str(finalout), window_sec, bool(exam), text_format=True)
     analysis = []
     analysis_path = finalout/"focus_analysis.jsonl"
     if llm_enable and llm_api_key:
         try:
             la.analyze_file_custom(clean_paragraphs, str(analysis_path), llm_api_key, llm_base_url, llm_model, dry_run=False)
         except Exception:
-            pipeline.run_llm_analysis(clean_paragraphs, str(analysis_path), llm_api_key, llm_base_url, llm_model, dry_run=False)
+            pipeline.run_llm_analysis(clean_paragraphs, str(analysis_path), llm_api_key, llm_base_url, llm_model, text_format=True, dry_run=False)
         recs = read_jsonl(analysis_path)
         flat = []
         for r in recs:
@@ -292,7 +292,7 @@ def notes(
         return {"notes": collapse()}
     prompt = (
         "把下面的内容作为你的唯一输出规范：你要把老师课堂上的口语内容，转换成对大学生最友好的知识笔记。绝对禁止生成json、jsonl、表格模板代码、机器格式或结构化数据，只能输出自然语言、可阅读、有标题、有重点的人类风格学习笔记。\n\n"
-        "输出风格要求：结构清晰、层级分明，包含模块：知识总览（Executive Summary）、知识结构图/概览思维导图（文字版）、重点与难点、易错点Clarification、典型考题与拆解、老师语音中的关键提醒、核心理解vs死记硬背分区、最终总结（一句话记忆法）。\n"
+        "输出风格要求：结构清晰、层级分明，包含模块：知识总览（Executive Summary）、知识结构图/概览思维导图（文字版）、重点与难点、易错点Clarification、典型考题与拆解、老师语音中的关键提醒、核理理解vs死记硬背分区、最终总结（一句话记忆法）。\n"
         "用人类语言写，不使用任何机器格式或键名，全篇自然语言+标题+小结；便于大学生复习，逻辑链条明确，概念解释短狠准，可带文字简图，内容能在5分钟内复习一遍；能提炼老师的口语，识别有用信息，删除口头禅，修正常识性错误与口误，提炼逻辑顺序。\n\n"
         "输出模板：\n"
         "🌿 《章节名称》学习笔记\n"

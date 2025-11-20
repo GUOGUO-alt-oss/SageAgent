@@ -138,6 +138,99 @@ def write_jsonl(recs, path):
         for r in recs:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
+def write_text(recs, path):
+    """将JSON数据转换为易读的文本格式"""
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        # 判断记录类型
+        if not recs:
+            f.write("暂无数据\n")
+            return
+        
+        # 检查是否为全局摘要（只有一个记录，包含one_paragraph字段）
+        if len(recs) == 1 and "one_paragraph" in recs[0]:
+            rec = recs[0]
+            f.write("=" * 60 + "\n")
+            f.write("🌍 全局摘要\n")
+            f.write("=" * 60 + "\n\n")
+            
+            f.write("📝 一句话总结：\n")
+            f.write(f"   {rec.get('one_line', '无')}\n\n")
+            
+            f.write("📄 详细总结：\n")
+            f.write(f"   {rec.get('one_paragraph', '无')}\n\n")
+            
+            if rec.get('exam_points'):
+                f.write("🎯 考试要点：\n")
+                for point in rec['exam_points']:
+                    f.write(f"   • {point}\n")
+                f.write("\n")
+            
+            if rec.get('pitfalls'):
+                f.write("⚠️ 易错点：\n")
+                for pitfall in rec['pitfalls']:
+                    f.write(f"   • {pitfall}\n")
+                f.write("\n")
+            
+            if rec.get('tips'):
+                f.write("💡 学习建议：\n")
+                for tip in rec['tips']:
+                    f.write(f"   • {tip}\n")
+                f.write("\n")
+        
+        # 检查是否为微段摘要（包含start_ms字段）
+        elif "start_ms" in recs[0]:
+            f.write("=" * 60 + "\n")
+            f.write("📈 微段摘要\n")
+            f.write("=" * 60 + "\n\n")
+            
+            for i, rec in enumerate(recs, 1):
+                start_ms = rec.get('start_ms', 0)
+                end_ms = rec.get('end_ms', 0)
+                start_min = start_ms // 60000
+                start_sec = (start_ms % 60000) // 1000
+                end_min = end_ms // 60000
+                end_sec = (end_ms % 60000) // 1000
+                
+                f.write(f"【时间段 {i:02d}】 {start_min:02d}:{start_sec:02d} - {end_min:02d}:{end_sec:02d}\n")
+                f.write(f"📝 摘要：{rec.get('summary', '无')}\n")
+                
+                if rec.get('exam_points'):
+                    f.write("🎯 考试要点：")
+                    f.write("、".join(rec['exam_points']))
+                    f.write("\n")
+                
+                if rec.get('pitfalls'):
+                    f.write("⚠️ 易错点：")
+                    f.write("、".join(rec['pitfalls']))
+                    f.write("\n")
+                
+                if rec.get('tips'):
+                    f.write("💡 学习建议：")
+                    f.write("、".join(rec['tips']))
+                    f.write("\n")
+                
+                f.write("-" * 40 + "\n\n")
+        
+        # 检查是否为章节摘要（包含chapter_id字段）
+        elif "chapter_id" in recs[0]:
+            f.write("=" * 60 + "\n")
+            f.write("📚 章节摘要\n")
+            f.write("=" * 60 + "\n\n")
+            
+            for i, rec in enumerate(recs, 1):
+                f.write(f"【章节 {rec.get('chapter_id', i)}】{rec.get('title', '无标题')}\n")
+                f.write("-" * 40 + "\n")
+                f.write(f"📝 一句话总结：\n   {rec.get('one_line', '无')}\n\n")
+                f.write(f"📄 详细总结：\n   {rec.get('one_paragraph', '无')}\n\n")
+                f.write("=" * 60 + "\n\n")
+        
+        else:
+            # 未知格式，直接输出JSON
+            f.write("数据格式：\n")
+            for rec in recs:
+                f.write(f"{json.dumps(rec, ensure_ascii=False, indent=2)}\n\n")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--segments", required=True, help="原始段落/片段 jsonl (src)")
@@ -145,15 +238,25 @@ def main():
     ap.add_argument("--outdir", default="finalout")
     ap.add_argument("--window_sec", type=int, default=60)
     ap.add_argument("--exam", action="store_true")
+    ap.add_argument("--text_format", action="store_true", help="生成文本格式输出")
     args = ap.parse_args()
     segs = load_segments(args.segments)
     chs = load_chapters(args.chapters)
     micro = micro_summaries(segs, window_sec=args.window_sec, exam=args.exam)
     chap = chapter_summaries(chs)
     glob = global_summary(chs, exam=args.exam)
+    
+    # 始终生成JSON格式
     write_jsonl(micro, str(Path(args.outdir)/"micro_summary.jsonl"))
     write_jsonl(chap, str(Path(args.outdir)/"chapter_summary.jsonl"))
     write_jsonl([glob], str(Path(args.outdir)/"global_summary.jsonl"))
+    
+    # 可选生成文本格式
+    if args.text_format:
+        write_text(micro, str(Path(args.outdir)/"micro_summary.txt"))
+        write_text(chap, str(Path(args.outdir)/"chapter_summary.txt"))
+        write_text([glob], str(Path(args.outdir)/"global_summary.txt"))
+        print("✅ 文本格式文件已生成")
 
 if __name__ == "__main__":
     main()

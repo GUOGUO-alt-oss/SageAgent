@@ -31,25 +31,45 @@ def run_asr(videos, out_jsonl, tmp_audio_dir, engine, model_size, device, comput
 def run_clean(train_jsonl, clean_paragraphs, min_chars, max_gap_ms, style):
     ct.process_files([train_jsonl], clean_paragraphs, min_chars, max_gap_ms, style=style)
 
-def run_chapters(clean_paragraphs, chapters_jsonl, min_gap_ms, min_len_chars, threshold):
+def run_chapters(clean_paragraphs, chapters_jsonl, min_gap_ms, min_len_chars, threshold, text_format=False):
     paras = cs.load_paragraphs(clean_paragraphs)
     chs = cs.segment_chapters(paras, min_gap_ms=min_gap_ms, min_len_chars=min_len_chars, threshold=threshold)
     cs.write_chapters(chs, chapters_jsonl)
+    
+    # 可选生成文本格式
+    if text_format:
+        text_path = str(Path(chapters_jsonl).with_suffix('')) + "_text.txt"
+        cs.write_chapters_text(chs, text_path)
 
-def run_summaries(train_jsonl, chapters_jsonl, finalout, window_sec, exam):
+def run_summaries(train_jsonl, chapters_jsonl, finalout, window_sec, exam, text_format=False):
     segs = sz.load_segments(train_jsonl)
     chs = sz.load_chapters(chapters_jsonl)
     micro = sz.micro_summaries(segs, window_sec=window_sec, exam=exam)
     chap = sz.chapter_summaries(chs)
     glob = sz.global_summary(chs, exam=exam)
+    
+    # 始终生成JSON格式
     sz.write_jsonl(micro, str(Path(finalout) / "micro_summary.jsonl"))
     sz.write_jsonl(chap, str(Path(finalout) / "chapter_summary.jsonl"))
     sz.write_jsonl([glob], str(Path(finalout) / "global_summary.jsonl"))
     sc.write_summaries(chs, str(Path(finalout) / "chapters_summary_exam.jsonl"), style="exam")
     sc.write_summaries(chs, str(Path(finalout) / "chapters_summary.jsonl"), style="plain")
+    
+    # 可选生成文本格式
+    if text_format:
+        sz.write_text(micro, str(Path(finalout) / "micro_summary.txt"))
+        sz.write_text(chap, str(Path(finalout) / "chapter_summary.txt"))
+        sz.write_text([glob], str(Path(finalout) / "global_summary.txt"))
+        sc.write_summaries_text(chs, str(Path(finalout) / "chapters_summary_text.txt"), style="plain")
+        sc.write_summaries_text(chs, str(Path(finalout) / "chapters_summary_exam_text.txt"), style="exam")
 
-def run_llm_analysis(clean_paragraphs, analysis_jsonl, api_key, base_url, model, dry_run=False):
+def run_llm_analysis(clean_paragraphs, analysis_jsonl, api_key, base_url, model, text_format=False, dry_run=False):
     la.analyze_file(clean_paragraphs, analysis_jsonl, api_key=api_key, base_url=base_url, model=model, dry_run=dry_run)
+    
+    # 可选生成文本格式
+    if text_format:
+        text_path = str(Path(analysis_jsonl).with_suffix('')) + "_text.txt"
+        la.write_analysis_text(analysis_jsonl, text_path)
 
 def main():
     ap = argparse.ArgumentParser()
@@ -74,6 +94,10 @@ def main():
     ap.add_argument("--exam", action="store_true")
     ap.add_argument("--skip_asr", action="store_true")
     ap.add_argument("--train_jsonl", default="")
+    ap.add_argument("--text_format", action="store_true", help="生成文本格式输出")
+    ap.add_argument("--llm_api_key", default="", help="LLM API密钥")
+    ap.add_argument("--llm_base_url", default="https://api.deepseek.com/v1", help="LLM API地址")
+    ap.add_argument("--llm_model", default="deepseek-chat", help="LLM模型名称")
     args = ap.parse_args()
 
     ensure_dirs(args.outdir, args.cleanout, args.finalout)
@@ -89,9 +113,14 @@ def main():
     run_clean(train_jsonl, clean_paragraphs, args.min_chars, args.max_gap_ms, args.style)
 
     chapters_jsonl = str(Path(args.outdir) / "chapters.jsonl")
-    run_chapters(clean_paragraphs, chapters_jsonl, args.min_gap_chapter_ms, args.min_len_chapter_chars, args.chapter_threshold)
+    run_chapters(clean_paragraphs, chapters_jsonl, args.min_gap_chapter_ms, args.min_len_chapter_chars, args.chapter_threshold, args.text_format)
 
-    run_summaries(train_jsonl, chapters_jsonl, args.finalout, args.window_sec, args.exam)
+    run_summaries(train_jsonl, chapters_jsonl, args.finalout, args.window_sec, args.exam, args.text_format)
+
+    # LLM分析（可选）
+    if args.llm_api_key:
+        analysis_jsonl = str(Path(args.finalout) / "focus_analysis.jsonl")
+        run_llm_analysis(clean_paragraphs, analysis_jsonl, args.llm_api_key, args.llm_base_url, args.llm_model, args.text_format)
 
     manifest = {
         "out": {
@@ -109,6 +138,25 @@ def main():
             "chapters_summary_exam": str(Path(args.finalout) / "chapters_summary_exam.jsonl"),
         }
     }
+    
+    # 添加文本格式文件到清单
+    if args.text_format:
+        manifest["out"].update({
+            "chapters_text": str(Path(args.outdir) / "chapters_text.txt")
+        })
+        manifest["finalout"].update({
+            "micro_summary_txt": str(Path(args.finalout) / "micro_summary.txt"),
+            "chapter_summary_txt": str(Path(args.finalout) / "chapter_summary.txt"),
+            "global_summary_txt": str(Path(args.finalout) / "global_summary.txt"),
+            "chapters_summary_text": str(Path(args.finalout) / "chapters_summary_text.txt"),
+            "chapters_summary_exam_text": str(Path(args.finalout) / "chapters_summary_exam_text.txt"),
+        })
+    
+    if args.llm_api_key:
+        manifest["finalout"]["focus_analysis"] = str(Path(args.finalout) / "focus_analysis.jsonl")
+        if args.text_format:
+            manifest["finalout"]["focus_analysis_text"] = str(Path(args.finalout) / "focus_analysis_text.txt")
+    
     print(json.dumps(manifest, ensure_ascii=False))
 
 if __name__ == "__main__":
