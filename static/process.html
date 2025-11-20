@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SageAgent · 视频处理</title>
+  <style>
+    body {
+      margin: 0;
+      background: #0f1115;
+      color: #e6e7e9;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", sans-serif
+    }
+
+    .app {
+      display: flex;
+      height: 100vh
+    }
+
+    .sidebar {
+      width: 280px;
+      background: #0a0c10;
+      border-right: 1px solid #1b1f24;
+      display: flex;
+      flex-direction: column
+    }
+
+    .brand {
+      padding: 16px 16px;
+      border-bottom: 1px solid #1b1f24;
+      display: flex;
+      align-items: center;
+      gap: 10px
+    }
+
+    .logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      background: #6c8cff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 16px;
+      color: #c9cdf2
+    }
+
+    .nav {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px
+    }
+
+    .nav a {
+      display: block;
+      text-decoration: none;
+      color: #c9cdf2;
+      background: #0f1318;
+      border: 1px solid #1f242b;
+      padding: 10px;
+      border-radius: 10px
+    }
+
+    .nav a.active {
+      background: #182039;
+      border-color: #30405b
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column
+    }
+
+    .header {
+      padding: 12px 18px;
+      border-bottom: 1px solid #1b1f24;
+      display: flex;
+      align-items: center;
+      justify-content: space-between
+    }
+
+    .header .title {
+      font-weight: 600;
+      color: #c9cdf2
+    }
+
+    .content {
+      padding: 18px;
+      overflow: auto
+    }
+
+    .card {
+      max-width: 980px;
+      margin: 0 auto 16px auto;
+      border: 1px solid #1b1f24;
+      background: #0f1318;
+      border-radius: 12px
+    }
+
+    .card .hd {
+      padding: 12px 16px;
+      border-bottom: 1px solid #1b1f24;
+      color: #9aa4b2;
+      font-size: 13px
+    }
+
+    .card .bd {
+      padding: 16px
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: #9aa4b2
+    }
+
+    input,
+    select {
+      background: #0f1318;
+      border: 1px solid #1f242b;
+      color: #e6e7e9;
+      border-radius: 8px;
+      padding: 8px
+    }
+
+    .button {
+      background: #6c8cff;
+      border: 0;
+      color: #fff;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer
+    }
+
+    .progress {
+      height: 10px;
+      background: #12161b;
+      border: 1px solid #1b1f24;
+      border-radius: 6px;
+      overflow: hidden
+    }
+
+    .bar {
+      height: 10px;
+      width: 0;
+      background: #6c8cff
+    }
+
+    pre {
+      white-space: pre-wrap;
+      background: #0b1320;
+      border: 1px solid #1b1f24;
+      color: #d6deff;
+      padding: 12px;
+      border-radius: 10px
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px
+    }
+
+    .toggle {
+      display: flex;
+      gap: 12px;
+      align-items: center
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <div class="sidebar">
+      <div class="brand">
+        <div class="logo">S</div>
+        <h1>SageAgent</h1>
+      </div>
+      <div class="nav">
+        <a href="/">SageAgent Chat</a>
+        <a href="/process_ui" class="active">视频处理</a>
+      </div>
+    </div>
+    <div class="main">
+      <div class="header">
+        <div class="title">视频摘要与重点分析</div>
+        <div id="status" style="font-size:12px;color:#9aa4b2"></div>
+      </div>
+      <div class="content">
+        <div class="card">
+          <div class="hd">上传与参数</div>
+          <div class="bd">
+            <div class="row">
+              <div>
+                <label>选择视频文件</label>
+                <input id="video" type="file" accept="video/*" />
+              </div>
+              <div>
+                <label>窗口秒数</label>
+                <input id="window_sec" type="number" value="60" />
+              </div>
+              <div>
+                <label>段落最少字数</label>
+                <input id="min_chars" type="number" value="200" />
+              </div>
+              <div>
+                <label>最大合并间隔(ms)</label>
+                <input id="max_gap_ms" type="number" value="1500" />
+              </div>
+              <div>
+                <label>章节最小间隔(ms)</label>
+                <input id="min_gap_chapter_ms" type="number" value="10000" />
+              </div>
+              <div>
+                <label>章节最少字数</label>
+                <input id="min_len_chapter_chars" type="number" value="100" />
+              </div>
+            </div>
+            <div class="row" style="margin-top:12px">
+              <div class="toggle"><input id="fast_mode" type="checkbox" checked /><span>加速模式</span></div>
+              <div class="toggle"><input id="enable_llm" type="checkbox" /><span>启用LLM重点分析</span></div>
+              <div>
+                <label>LLM模型</label>
+                <input id="llm_model" type="text" value="deepseek-chat" />
+              </div>
+              <div>
+                <label>LLM Base URL</label>
+                <input id="llm_base" type="text" value="https://api.deepseek.com/v1" />
+              </div>
+              <div>
+                <label>API Key</label>
+                <input id="llm_key" type="password" placeholder="不保存，仅本次调用" />
+              </div>
+            </div>
+            <div class="row" style="margin-top:14px">
+              <button id="submit" class="button">开始处理</button>
+            </div>
+            <div style="margin-top:14px">
+              <div class="progress">
+                <div id="bar" class="bar"></div>
+              </div>
+              <div id="steps" style="margin-top:8px;font-size:12px;color:#9aa4b2"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="card" id="box_focus" style="grid-column:1/-1">
+            <div class="hd">重点分析（LLM）</div>
+            <div class="bd">
+              <pre id="focus"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const el = id => document.getElementById(id)
+    function renderSteps(steps) { const order = ['upload', 'asr', 'clean', 'chapters', 'summaries', 'llm', 'done']; const icons = { pending: '⏳', done: '✅', failed: '❌' }; const arr = order.map(k => `${k}: ${icons[steps[k]] || steps[k] || '⏳'}`); el('steps').textContent = arr.join('  '); const doneCount = order.filter(k => steps[k] === 'done').length; const percent = Math.round(doneCount / order.length * 100); el('bar').style.width = percent + '%' }
+    async function poll(uid) { if (!uid) { el('status').textContent = 'UID无效'; return } try { const r = await fetch('/progress?uid=' + uid); const p = await r.json(); if (p.error) { el('status').textContent = '出错：' + p.error; return } renderSteps(p.steps || {}); if ((p.stage || '') === 'done') { const fr = await fetch('/final?uid=' + uid); const data = await fr.json(); if (data.status === 'processing') return; if (data.error) { el('status').textContent = '出错：' + data.error; return } el('status').textContent = '完成'; el('global').textContent = ''; el('chapters').textContent = ''; el('micro').textContent = ''; el('focus').textContent = ''; el('global').textContent = JSON.stringify(data.global_summary, null, 2); el('chapters').textContent = JSON.stringify(data.chapter_summary, null, 2); el('micro').textContent = JSON.stringify(data.micro_summary, null, 2); if (data.focus_analysis && Array.isArray(data.focus_analysis)) { el('focus').textContent = JSON.stringify(data.focus_analysis, null, 2) } } else { setTimeout(() => poll(uid), 1000) } } catch (e) { el('status').textContent = '网络或服务错误' } }
+    el('submit').onclick = async () => { const file = el('video').files[0]; if (!file) { el('status').textContent = '请选择视频'; return } el('status').textContent = '开始处理…'; el('bar').style.width = '0%'; el('steps').textContent = ''; const fd = new FormData(); fd.append('video', file); fd.append('window_sec', el('window_sec').value); fd.append('min_chars', el('min_chars').value); fd.append('max_gap_ms', el('max_gap_ms').value); fd.append('min_gap_chapter_ms', el('min_gap_chapter_ms').value); fd.append('min_len_chapter_chars', el('min_len_chapter_chars').value); if (el('fast_mode').checked) { fd.append('engine', 'faster-whisper'); fd.append('model_size', 'small'); fd.append('device', 'cuda'); fd.append('compute_type', 'float16'); fd.append('segment_time', '45') } fd.append('llm_enable', el('enable_llm').checked ? '1' : '0'); if (el('enable_llm').checked) { fd.append('llm_model', el('llm_model').value); fd.append('llm_base_url', el('llm_base').value); fd.append('llm_api_key', el('llm_key').value) } try { const resp = await fetch('/start_process', { method: 'POST', body: fd }); const data = await resp.json(); if (!data || data.error) { el('status').textContent = '启动失败'; return } poll(data.uid) } catch (e) { el('status').textContent = '网络或服务错误' } }
+  </script>
+</body>
+
+</html>

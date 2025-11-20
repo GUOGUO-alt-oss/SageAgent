@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.python-version
+.DS_Store
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Local data/artifacts
+out/
+cleanout/
+finalout/
+web_out/
+uploads/
+tmp_audio/
+Downloads/
+
+# Models (optional: keep small configs, ignore large binaries)
+models/mslite/*
+!models/mslite/tiny/
+models/mslite/tiny/*.onnx*
+models/simple/

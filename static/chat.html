@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SageAgent · Chat</title>
+  <style>
+    body{margin:0;background:#0f1115;color:#e6e7e9;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",Arial,"Noto Sans",sans-serif}
+    .app{display:flex;height:100vh}
+    .sidebar{width:280px;background:#0a0c10;border-right:1px solid #1b1f24;display:flex;flex-direction:column}
+    .brand{padding:16px 16px;border-bottom:1px solid #1b1f24;display:flex;align-items:center;gap:10px}
+    .logo{width:28px;height:28px;border-radius:6px;background:#6c8cff;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+    .brand h1{margin:0;font-size:16px;color:#c9cdf2}
+    .panel{padding:14px;overflow:auto}
+    .panel h3{margin:8px 0 10px 0;font-size:13px;color:#9aa4b2}
+    .input{display:flex;flex-direction:column;gap:8px}
+    .input label{font-size:12px;color:#9aa4b2}
+    .input input{background:#0f1318;border:1px solid #1f242b;color:#e6e7e9;border-radius:8px;padding:8px}
+    .button{background:#6c8cff;border:0;color:#fff;border-radius:8px;padding:8px 12px;cursor:pointer}
+    .button:disabled{opacity:.6;cursor:not-allowed}
+    .main{flex:1;display:flex;flex-direction:column}
+    .header{padding:12px 18px;border-bottom:1px solid #1b1f24;display:flex;align-items:center;justify-content:space-between}
+    .header .title{font-weight:600;color:#c9cdf2}
+    .chat{flex:1;overflow:auto;padding:20px}
+    .msg{max-width:820px;margin:0 auto 14px auto;display:flex;gap:12px}
+    .msg .avatar{width:32px;height:32px;border-radius:50%;background:#1b1f24;display:flex;align-items:center;justify-content:center;color:#9aa4b2}
+    .msg .bubble{flex:1;border:1px solid #1b1f24;background:#0f1318;border-radius:12px;padding:12px;white-space:pre-wrap}
+    .msg.user .bubble{background:#0b1628;border-color:#23324a}
+    .composer{padding:14px 18px;border-top:1px solid #1b1f24}
+    .composer .box{max-width:820px;margin:0 auto;display:flex;gap:10px}
+    .composer textarea{flex:1;resize:none;min-height:60px;max-height:160px;background:#0f1318;border:1px solid #1f242b;color:#e6e7e9;border-radius:12px;padding:10px}
+    .composer .actions{display:flex;align-items:flex-end;gap:10px}
+    .typing{max-width:820px;margin:0 auto 10px auto;color:#9aa4b2;font-size:12px}
+  </style>
+  </head>
+<body>
+  <div class="app">
+    <div class="sidebar">
+      <div class="brand"><div class="logo">S</div><h1>SageAgent</h1></div>
+      <div class="panel">
+        <h3>模型与密钥</h3>
+        <div class="input">
+          <label>模型</label>
+          <input id="model" value="deepseek-chat" />
+          <label>Base URL</label>
+          <input id="base" value="https://api.deepseek.com/v1" />
+          <label>API Key</label>
+          <input id="key" type="password" placeholder="仅用于本次会话" />
+        </div>
+        <h3 style="margin-top:14px">系统提示</h3>
+        <div class="input">
+          <input id="sys" value="你是一名专业的助教，回答要简洁、准确。" />
+        </div>
+        <h3 style="margin-top:14px">会话</h3>
+        <div style="display:flex;gap:8px">
+          <button id="newchat" class="button">新建会话</button>
+          <button id="clear" class="button" style="background:#3b4252">清空消息</button>
+        </div>
+      </div>
+    </div>
+    <div class="main">
+      <div class="header"><div class="title">SageAgent Chat</div><div style="display:flex;gap:10px;align-items:center"><a href="/process_ui" class="button">视频处理</a><div id="status" style="font-size:12px;color:#9aa4b2"></div></div></div>
+      <div id="chat" class="chat"></div>
+      <div id="typing" class="typing"></div>
+      <div class="composer">
+        <div class="box">
+          <textarea id="input" placeholder="输入问题，Shift+Enter换行，Enter发送"></textarea>
+          <div class="actions"><button id="send" class="button">发送</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const el = id => document.getElementById(id)
+    const state = {history:[],pending:false}
+    function sanitize(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+    function add(role,content){state.history.push({role,content});const w=document.createElement('div');w.className='msg '+(role==='user'?'user':'assistant');const a=document.createElement('div');a.className='avatar';a.textContent=role==='user'?'我':'AI';const b=document.createElement('div');b.className='bubble';b.innerHTML=sanitize(content);w.appendChild(a);w.appendChild(b);el('chat').appendChild(w);el('chat').scrollTop=el('chat').scrollHeight}
+    function typewriter(text){return new Promise(resolve=>{let i=0;let buf='';const step=()=>{if(i>=text.length){resolve();return}buf+=text[i];i++;el('typing').textContent='SageAgent 正在生成…';if(el('chat').lastChild){el('chat').lastChild.querySelector('.bubble').innerHTML=sanitize(buf)}setTimeout(step,8)};step()})}
+    async function send(){if(state.pending)return;const key=el('key').value.trim();if(!key){el('status').textContent='请填写API Key';return}const prompt=el('input').value.trim();if(!prompt)return;el('input').value='';add('user',prompt);state.pending=true;el('send').disabled=true;el('status').textContent='处理中';const fd=new FormData();fd.append('prompt',prompt);fd.append('history',JSON.stringify(state.history));fd.append('system_prompt',el('sys').value);fd.append('llm_model',el('model').value);fd.append('llm_base_url',el('base').value);fd.append('llm_api_key',key);add('assistant','');try{const resp=await fetch('/chat',{method:'POST',body:fd});const data=await resp.json();const reply=(data&&data.reply)||'';await typewriter(reply);el('typing').textContent='';state.history[state.history.length-1].content=reply;el('status').textContent='';}catch(e){el('typing').textContent='';state.history[state.history.length-1].content='网络或服务错误';}state.pending=false;el('send').disabled=false}
+    el('send').onclick=send
+    el('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}})
+    el('newchat').onclick=()=>{state.history=[];el('chat').innerHTML='';el('status').textContent=''}
+    el('clear').onclick=()=>{state.history=[];el('chat').innerHTML=''}
+  </script>
+</body>
+</html>

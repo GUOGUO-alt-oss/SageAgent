@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>视频摘要可视化</title>
+  <style>
+    body{font-family:sans-serif;margin:20px;}
+    .box{border:1px solid #ddd;padding:12px;margin-bottom:16px;border-radius:8px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    label{display:block;margin-bottom:6px}
+    button{padding:8px 14px}
+    pre{white-space:pre-wrap;background:#f7f7f7;padding:10px;border-radius:6px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  </style>
+</head>
+<body>
+  <h2>教学内容处理与聊天</h2>
+  <div class="row" style="margin-bottom:12px">
+    <button id="tab_process">处理视频</button>
+    <button id="tab_chat">聊天</button>
+  </div>
+  <div class="box">
+    <div id="panel_process">
+    <label>选择视频文件</label>
+    <input id="video" type="file" accept="video/*" />
+    <div class="row">
+      <label>窗口秒数
+        <input id="window_sec" type="number" value="60" />
+      </label>
+      <label>段落最少字数
+        <input id="min_chars" type="number" value="200" />
+      </label>
+      <label>最大合并间隔(ms)
+        <input id="max_gap_ms" type="number" value="1500" />
+      </label>
+      <label>章节最小间隔(ms)
+        <input id="min_gap_chapter_ms" type="number" value="10000" />
+      </label>
+      <label>章节最少字数
+        <input id="min_len_chapter_chars" type="number" value="100" />
+      </label>
+    </div>
+    <div class="row">
+      <label><input id="show_global" type="checkbox" checked /> 显示全局摘要</label>
+      <label><input id="show_chapters" type="checkbox" checked /> 显示章节摘要</label>
+      <label><input id="show_micro" type="checkbox" checked /> 显示微段摘要</label>
+    </div>
+    <div class="row">
+      <label><input id="fast_mode" type="checkbox" checked /> 加速模式</label>
+      <label><input id="enable_llm" type="checkbox" /> 启用LLM重点分析</label>
+      <label>LLM模型
+        <input id="llm_model" type="text" value="deepseek-chat" />
+      </label>
+      <label>LLM Base URL
+        <input id="llm_base" type="text" value="https://api.deepseek.com/v1" />
+      </label>
+      <label>API Key
+        <input id="llm_key" type="password" placeholder="不保存，仅本次调用" />
+      </label>
+    </div>
+    <button id="submit">开始处理</button>
+    <span id="status" style="margin-left:12px"></span>
+    <div id="progress" style="margin-top:10px">
+      <div>进度条：</div>
+      <div id="bar" style="height:8px;background:#eee;border-radius:4px;overflow:hidden">
+        <div id="barfill" style="height:8px;width:0%;background:#4caf50"></div>
+      </div>
+      <div id="steps" style="margin-top:8px;font-size:12px;color:#555"></div>
+    </div>
+    </div>
+    <div id="panel_chat" style="display:none">
+      <div id="chatbox" style="height:320px;overflow:auto;border:1px solid #ddd;border-radius:8px;padding:10px;background:#fafafa"></div>
+      <div class="row" style="margin-top:8px">
+        <input id="chat_input" type="text" style="flex:1" placeholder="输入问题..." />
+        <button id="chat_send">发送</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label>系统提示
+          <input id="chat_sys" type="text" value="你是一名专业的助教，回答要简洁、准确。" />
+        </label>
+        <label>模型
+          <input id="chat_model" type="text" value="deepseek-chat" />
+        </label>
+        <label>Base URL
+          <input id="chat_base" type="text" value="https://api.deepseek.com/v1" />
+        </label>
+        <label>API Key
+          <input id="chat_key" type="password" placeholder="不保存，仅本次调用" />
+        </label>
+      </div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="box" id="box_global">
+      <h3>全局摘要</h3>
+      <pre id="global"></pre>
+    </div>
+    <div class="box" id="box_chapters">
+      <h3>章节摘要</h3>
+      <pre id="chapters"></pre>
+    </div>
+  </div>
+  <div class="box" id="box_micro">
+    <h3>微段摘要</h3>
+    <pre id="micro"></pre>
+  </div>
+  <div class="box" id="box_focus">
+    <h3>重点分析（LLM）</h3>
+    <pre id="focus"></pre>
+  </div>
+  <script>
+    const el = id => document.getElementById(id);
+    const chatState = { history: [] };
+    function addMsg(role, content){
+      chatState.history.push({role, content});
+      const div = document.createElement('div');
+      div.style.margin = '6px 0';
+      div.innerHTML = `<b>${role==='user'?'我':'助手'}:</b> ${content.replace(/</g,'&lt;')}`;
+      el('chatbox').appendChild(div);
+      el('chatbox').scrollTop = el('chatbox').scrollHeight;
+    }
+    el('chat_send').onclick = async () => {
+      const prompt = el('chat_input').value.trim();
+      if(!prompt) return;
+      addMsg('user', prompt);
+      el('chat_input').value = '';
+      try{
+        const fd = new FormData();
+        fd.append('prompt', prompt);
+        fd.append('history', JSON.stringify(chatState.history));
+        fd.append('system_prompt', el('chat_sys').value);
+        fd.append('llm_model', el('chat_model').value);
+        fd.append('llm_base_url', el('chat_base').value);
+        fd.append('llm_api_key', el('chat_key').value);
+        const resp = await fetch('/chat', {method:'POST', body: fd});
+        const data = await resp.json();
+        addMsg('assistant', data.reply||'');
+      }catch(e){ addMsg('assistant','网络或服务错误'); }
+    };
+    el('tab_process').onclick = () => {
+      el('panel_process').style.display='';
+      el('panel_chat').style.display='none';
+    };
+    el('tab_chat').onclick = () => {
+      el('panel_process').style.display='none';
+      el('panel_chat').style.display='';
+    };
+    function applyVisibility(){
+      const showG = el('show_global').checked;
+      const showC = el('show_chapters').checked;
+      const showM = el('show_micro').checked;
+      el('box_global').style.display = showG ? '' : 'none';
+      el('box_chapters').style.display = showC ? '' : 'none';
+      el('box_micro').style.display = showM ? '' : 'none';
+      el('box_focus').style.display = el('enable_llm').checked ? '' : 'none';
+    }
+    function renderSteps(steps){
+      const order = ['upload','asr','clean','chapters','summaries','llm','done'];
+      const icons = {pending:'⏳', done:'✅', failed:'❌'};
+      const arr = order.map(k=>`${k}: ${icons[steps[k]]||steps[k]||'⏳'}`);
+      el('steps').textContent = arr.join('  ');
+      const doneCount = order.filter(k=>steps[k]==='done').length;
+      const percent = Math.round(doneCount/order.length*100);
+      el('barfill').style.width = percent + '%';
+    }
+    async function poll(uid){
+      if(!uid){ el('status').textContent = 'UID无效，未开始任务'; return; }
+      try{
+        const r = await fetch('/progress?uid='+uid);
+        const p = await r.json();
+        if(p.error){ el('status').textContent = '出错：'+p.error; return; }
+        renderSteps(p.steps||{});
+        if((p.stage||'')==='done'){
+          const fr = await fetch('/final?uid='+uid);
+          const data = await fr.json();
+          if(data.status==='processing') return;
+          if(data.error){ el('status').textContent = '出错：'+data.error; return; }
+          el('status').textContent = '完成';
+          el('global').textContent = '';
+          el('chapters').textContent = '';
+          el('micro').textContent = '';
+          el('focus').textContent = '';
+          if(el('show_global').checked){
+            el('global').textContent = JSON.stringify(data.global_summary, null, 2);
+          }
+          if(el('show_chapters').checked){
+            el('chapters').textContent = JSON.stringify(data.chapter_summary, null, 2);
+          }
+          if(el('show_micro').checked){
+            el('micro').textContent = JSON.stringify(data.micro_summary, null, 2);
+          }
+          if(data.focus_analysis && Array.isArray(data.focus_analysis)){
+            el('focus').textContent = JSON.stringify(data.focus_analysis, null, 2);
+          }
+          applyVisibility();
+        }else{
+          setTimeout(()=>poll(uid), 1000);
+        }
+      }catch(e){ el('status').textContent = '网络或服务错误'; }
+    }
+    el('submit').onclick = async () => {
+      const file = el('video').files[0];
+      if(!file){
+        alert('请选择视频文件');
+        return;
+      }
+      el('status').textContent = '开始异步处理…';
+      el('barfill').style.width = '0%';
+      el('steps').textContent = '';
+      const fd = new FormData();
+      fd.append('video', file);
+      fd.append('window_sec', el('window_sec').value);
+      fd.append('min_chars', el('min_chars').value);
+      fd.append('max_gap_ms', el('max_gap_ms').value);
+      fd.append('min_gap_chapter_ms', el('min_gap_chapter_ms').value);
+      fd.append('min_len_chapter_chars', el('min_len_chapter_chars').value);
+      if(el('fast_mode').checked){
+        fd.append('engine','faster-whisper');
+        fd.append('model_size','small');
+        fd.append('device','cuda');
+        fd.append('compute_type','float16');
+        fd.append('segment_time','45');
+      }
+      fd.append('llm_enable', el('enable_llm').checked ? '1' : '0');
+      if(el('enable_llm').checked){
+        fd.append('llm_model', el('llm_model').value);
+        fd.append('llm_base_url', el('llm_base').value);
+        fd.append('llm_api_key', el('llm_key').value);
+      }
+      try{
+        const resp = await fetch('/start_process', { method:'POST', body: fd });
+        const data = await resp.json();
+        if(!data || data.error){ el('status').textContent = '出错：' + (data && data.error || '启动失败'); return; }
+        const uid = data.uid;
+        if(!uid){ el('status').textContent = '出错：UID缺失'; return; }
+        el('status').textContent = '已排队，开始跟踪进度…';
+        poll(uid);
+      }catch(e){ el('status').textContent = '网络或服务错误'; }
+    };
+    ['show_global','show_chapters','show_micro','enable_llm'].forEach(id=>{
+      el(id).addEventListener('change', applyVisibility);
+    });
+    applyVisibility();
+  </script>
+</body>
+</html>
